@@ -138,6 +138,18 @@ func verifyToken(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func getREADME(w http.ResponseWriter, r *http.Request) {
+	readmeBytes, err := ioutil.ReadFile("README.txt")
+
+	if err != nil {
+		fmt.Print(err)
+		w.WriteHeader(500)
+		w.Write([]byte("An error has occured. If this persists please contact us at support@example.com"))
+	}
+
+	w.Write(readmeBytes)
+}
+
 func main() {
 	// Create router
 	r := chi.NewRouter()
@@ -151,6 +163,7 @@ func main() {
 	r.Get("/verify", verifyToken)
 
 	// GET /README.txt
+	r.Get("/README.txt", getREADME)
 
 	// GET /stats
 
