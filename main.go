@@ -69,7 +69,7 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 
 	serverError := func() {
 		// Server error details not returned to client to hide implementation. only logged
-		fmt.Print(err)
+		fmt.Print(err, "\n")
 		w.WriteHeader(500)
 		w.Write([]byte("An error occured. If this persists please contact us at support@example.com"))
 	}
@@ -105,7 +105,7 @@ func verifyToken(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	handleError := func(statusCode int, message string) {
-		fmt.Print(err)
+		fmt.Print(err, "\n")
 		w.WriteHeader(statusCode)
 		w.Write([]byte(message))
 	}
@@ -187,8 +187,6 @@ func init() {
 func main() {
 	// Create router
 	r := chi.NewRouter()
-
-	r.Get("/", getIndex)
 
 	// GET /auth/:username
 	r.Get("/auth/{username}", getToken)
