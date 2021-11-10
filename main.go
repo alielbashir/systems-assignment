@@ -35,9 +35,6 @@ type Statistic struct {
 	verifyVisits int
 }
 
-func getIndex(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello")
-}
 
 func recordAuthVisit(username string) {
 	_, exists := stats[username]
