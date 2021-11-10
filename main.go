@@ -3,6 +3,7 @@ package main
 // TODO: write verify, readme, and stats endpoints
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -16,11 +17,54 @@ import (
 const (
 	publicKeyPath  = "public.pem"
 	privateKeyPath = "private.pem"
+	readMePath     = "README.txt"
 	tokenTimeLimit = 5 * time.Second // lifetime of jwt after issuance
 )
 
+var (
+	privateKey  *rsa.PrivateKey
+	publicKey   *rsa.PublicKey
+	publicKeyBytes []byte
+	readmeBytes []byte
+	stats       = map[string]*Statistic{}
+)
+
+type Statistic struct {
+	// holds a user's verify and auth attempts
+	authVisits   int
+	verifyVisits int
+}
+
 func getIndex(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello")
+}
+
+func recordAuthVisit(username string) {
+	_, exists := stats[username]
+
+	if exists {
+		stats[username].authVisits++
+	} else {
+		stats[username] = &Statistic{
+			authVisits:   1,
+			verifyVisits: 0,
+		}
+	}
+	fmt.Println(username, *stats[username])
+}
+
+func recordVerifyVisit(username string) {
+	_, exists := stats[username]
+
+	if exists {
+		stats[username].verifyVisits++
+	} else {
+		stats[username] = &Statistic{
+			authVisits:   0,
+			verifyVisits: 1,
+		}
+	}
+	fmt.Println(username, *stats[username])
 }
 
 func getToken(w http.ResponseWriter, r *http.Request) {
@@ -33,18 +77,6 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("An error occured. If this persists please contact us at support@example.com"))
 	}
 
-	publicKeyString, err := ioutil.ReadFile(publicKeyPath)
-	if err != nil {
-		serverError()
-		return
-	}
-
-	privateKeyBytes, err := ioutil.ReadFile(privateKeyPath)
-	if err != nil {
-		serverError()
-		return
-	}
-
 	username := chi.URLParam(r, "username")
 
 	expiryTime := time.Now().Add(tokenTimeLimit)
@@ -52,12 +84,6 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: jwt.NewNumericDate(expiryTime),
 		Subject:   username,
 	})
-
-	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateKeyBytes)
-	if err != nil {
-		serverError()
-		return
-	}
 
 	signedToken, err := token.SignedString(privateKey)
 	if err != nil {
@@ -73,49 +99,30 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	w.Write(publicKeyString)
+	recordAuthVisit(username)
+
+	w.Write(publicKeyBytes)
 }
 
 func verifyToken(w http.ResponseWriter, r *http.Request) {
-
 	var err error
 
 	handleError := func(statusCode int, message string) {
-		switch {
-		case 500 <= statusCode:
-			// Server error
-			fmt.Print(err)
-			w.WriteHeader(statusCode)
-			w.Write([]byte("An error has occured. If this persists please contact us at support@example.com"))
-		default:
-			// All other errors
-			fmt.Print(err)
-			w.WriteHeader(statusCode)
-			w.Write([]byte(message))
-		}
+		fmt.Print(err)
+		w.WriteHeader(statusCode)
+		w.Write([]byte(message))
 	}
 
-	tokenString, err := r.Cookie("token")
+	tokenCookie, err := r.Cookie("token")
 
 	if err != nil {
 		handleError(400, "No token cookie received. The cookie may be expired. Please obtain a new JWT from /auth/:username\n")
 		return
 	}
 
-	publicKeyBytes, err := ioutil.ReadFile(publicKeyPath)
-	if err != nil {
-		handleError(500, "")
-		return
-	}
+	fmt.Print("token = ", tokenCookie.Value, "\n")
 
-	fmt.Print("token = ", tokenString.Value, "\n")
-	publicKey, err := jwt.ParseRSAPublicKeyFromPEM(publicKeyBytes)
-	if err != nil {
-		handleError(500, "")
-		return
-	}
-
-	token, err := jwt.Parse(tokenString.Value, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenCookie.Value, func(token *jwt.Token) (interface{}, error) {
 
 		return publicKey, err
 	})
@@ -126,28 +133,58 @@ func verifyToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// if okay, verify
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		username := fmt.Sprintf("%v", claims["sub"])
-		w.WriteHeader(200)
-		w.Write([]byte(username))
-		return
-	} else {
+	claims, ok := token.Claims.(jwt.MapClaims)
+
+	if !ok || !token.Valid {
 		handleError(400, "Token invalid. Please obtain a new JWT cookie from /auth/:username\n")
 		return
 	}
 
+	username := fmt.Sprintf("%v", claims["sub"])
+
+	recordVerifyVisit(username)
+	w.Write([]byte(username))
 }
 
 func getREADME(w http.ResponseWriter, r *http.Request) {
-	readmeBytes, err := ioutil.ReadFile("README.txt")
-
-	if err != nil {
-		fmt.Print(err)
-		w.WriteHeader(500)
-		w.Write([]byte("An error has occured. If this persists please contact us at support@example.com"))
-	}
-
 	w.Write(readmeBytes)
+}
+
+func getStats(w http.ResponseWriter, r *http.Request) {
+	//
+}
+
+func fatal(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func setupKeys() {
+	var err error
+	
+	publicKeyBytes, err = ioutil.ReadFile(publicKeyPath)
+	fatal(err)
+
+	privateKeyBytes, err := ioutil.ReadFile(privateKeyPath)
+	fatal(err)
+
+	publicKey, err = jwt.ParseRSAPublicKeyFromPEM(publicKeyBytes)
+	fatal(err)
+
+	privateKey, err = jwt.ParseRSAPrivateKeyFromPEM(privateKeyBytes)
+	fatal(err)
+}
+
+func setupReadMe() {
+	var err error
+	readmeBytes, err = ioutil.ReadFile(readMePath)
+	fatal(err)
+}
+
+func init() {
+	setupKeys()
+	setupReadMe()
 }
 
 func main() {
@@ -166,6 +203,7 @@ func main() {
 	r.Get("/README.txt", getREADME)
 
 	// GET /stats
+	r.Get("/stats", getStats)
 
 	log.Fatal(http.ListenAndServe(":8001", r))
 
