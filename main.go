@@ -18,7 +18,7 @@ const (
 	publicKeyPath  = "public.pem"
 	privateKeyPath = "private.pem"
 	readMePath     = "README.txt"
-	tokenTimeLimit = 5 * time.Second // lifetime of jwt after issuance
+	tokenTimeLimit = 24 * time.Hour // lifetime of jwt after issuance
 )
 
 var (
@@ -41,7 +41,7 @@ func approxRollingAverage(avg float64, newTime int64, n int) (newAvg float64) {
 	// Adapted from https://stackoverflow.com/a/16757630/13886854
 	if avg == 0 {
 		// handle case of first average
-		avg = newAvg
+		avg = float64(newTime)
 		return avg
 	}
 	avg -= avg / float64(n)
