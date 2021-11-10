@@ -22,27 +22,50 @@ const (
 )
 
 var (
-	privateKey  *rsa.PrivateKey
-	publicKey   *rsa.PublicKey
+	privateKey     *rsa.PrivateKey
+	publicKey      *rsa.PublicKey
 	publicKeyBytes []byte
-	readmeBytes []byte
-	stats       = map[string]*Statistic{}
+	readmeBytes    []byte
+	stats          = map[string]*Statistic{}
 )
 
 type Statistic struct {
-	// holds a user's verify and auth attempts
-	authVisits   int
-	verifyVisits int
+	// holds a user's verify and auth attempts and averages
+	averageEncodeTime float64
+	averageDecodeTime float64
+	authVisits        int
+	verifyVisits      int
 }
 
+func approxRollingAverage(avg float64, newTime int64, n int) (newAvg float64) {
+	// Adapted from https://stackoverflow.com/a/16757630/13886854
+	if avg == 0 {
+		// handle case of first average
+		avg = newAvg
+		return avg
+	}
+	avg -= avg / float64(n)
+	avg += float64(newTime) / float64(n)
+	return avg
+}
 
-func recordAuthVisit(username string) {
+func recordAuthVisit(username string, startTime time.Time) {
+	elapsed := time.Since(startTime)
+
 	_, exists := stats[username]
 
 	if exists {
 		stats[username].authVisits++
+
+		oldAverage := stats[username].averageEncodeTime
+		visits := stats[username].authVisits
+		stats[username].averageEncodeTime = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
+		
+
 	} else {
 		stats[username] = &Statistic{
+			averageEncodeTime: float64(elapsed.Microseconds()),
+			averageDecodeTime: 0,
 			authVisits:   1,
 			verifyVisits: 0,
 		}
@@ -50,13 +73,22 @@ func recordAuthVisit(username string) {
 	fmt.Println(username, *stats[username])
 }
 
-func recordVerifyVisit(username string) {
+func recordVerifyVisit(username string, startTime time.Time) {
+	elapsed := time.Since(startTime)
+
 	_, exists := stats[username]
 
 	if exists {
 		stats[username].verifyVisits++
+
+		oldAverage := stats[username].averageDecodeTime
+		visits := stats[username].verifyVisits
+		stats[username].averageDecodeTime = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
+		
 	} else {
 		stats[username] = &Statistic{
+			averageEncodeTime: 0,
+			averageDecodeTime: float64(elapsed.Microseconds()),
 			authVisits:   0,
 			verifyVisits: 1,
 		}
@@ -65,6 +97,8 @@ func recordVerifyVisit(username string) {
 }
 
 func getToken(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
 	var err error
 
 	serverError := func() {
@@ -96,12 +130,14 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	recordAuthVisit(username)
+	recordAuthVisit(username, start)
 
 	w.Write(publicKeyBytes)
 }
 
 func verifyToken(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
 	var err error
 
 	handleError := func(statusCode int, message string) {
@@ -139,7 +175,7 @@ func verifyToken(w http.ResponseWriter, r *http.Request) {
 
 	username := fmt.Sprintf("%v", claims["sub"])
 
-	recordVerifyVisit(username)
+	recordVerifyVisit(username, start)
 	w.Write([]byte(username))
 }
 
@@ -159,7 +195,7 @@ func fatal(err error) {
 
 func setupKeys() {
 	var err error
-	
+
 	publicKeyBytes, err = ioutil.ReadFile(publicKeyPath)
 	fatal(err)
 
