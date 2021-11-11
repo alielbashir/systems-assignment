@@ -60,17 +60,18 @@ func recordAuthVisit(username string, startTime time.Time) {
 		oldAverage := stats[username].averageEncodeTime
 		visits := stats[username].authVisits
 		stats[username].averageEncodeTime = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
-		
 
 	} else {
 		stats[username] = &Statistic{
 			averageEncodeTime: float64(elapsed.Microseconds()),
 			averageDecodeTime: 0,
-			authVisits:   1,
-			verifyVisits: 0,
+			authVisits:        1,
+			verifyVisits:      0,
 		}
 	}
-	fmt.Println(username, *stats[username])
+	fmt.Printf("/auth endpoint visited by %v\n", username)
+	fmt.Printf("%+v\n", *stats[username])
+	fmt.Print("----------------------------------------------------------------------------------------\n\n")
 }
 
 func recordVerifyVisit(username string, startTime time.Time) {
@@ -84,16 +85,18 @@ func recordVerifyVisit(username string, startTime time.Time) {
 		oldAverage := stats[username].averageDecodeTime
 		visits := stats[username].verifyVisits
 		stats[username].averageDecodeTime = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
-		
+
 	} else {
 		stats[username] = &Statistic{
 			averageEncodeTime: 0,
 			averageDecodeTime: float64(elapsed.Microseconds()),
-			authVisits:   0,
-			verifyVisits: 1,
+			authVisits:        0,
+			verifyVisits:      1,
 		}
 	}
-	fmt.Println(username, *stats[username])
+	fmt.Printf("/verify endpoint visited by %v\n", username)
+	fmt.Printf("%+v\n", *stats[username])
+	fmt.Print("----------------------------------------------------------------------------------------\n\n")
 }
 
 func getToken(w http.ResponseWriter, r *http.Request) {
@@ -152,8 +155,6 @@ func verifyToken(w http.ResponseWriter, r *http.Request) {
 		handleError(400, "No token cookie received. The cookie may be expired. Please obtain a new JWT from /auth/:username\n")
 		return
 	}
-
-	fmt.Print("token = ", tokenCookie.Value, "\n")
 
 	token, err := jwt.Parse(tokenCookie.Value, func(token *jwt.Token) (interface{}, error) {
 
