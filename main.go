@@ -31,8 +31,8 @@ var (
 
 type Statistic struct {
 	// holds a user's verify and auth attempts and averages
-	averageEncodeTime float64
-	averageDecodeTime float64
+	averageEncodeMicroseconds float64
+	averageDecodeMicroseconds float64
 	authVisits        int
 	verifyVisits      int
 }
@@ -57,21 +57,21 @@ func recordAuthVisit(username string, startTime time.Time) {
 	if exists {
 		stats[username].authVisits++
 
-		oldAverage := stats[username].averageEncodeTime
+		oldAverage := stats[username].averageEncodeMicroseconds
 		visits := stats[username].authVisits
-		stats[username].averageEncodeTime = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
+		stats[username].averageEncodeMicroseconds = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
 
 	} else {
 		stats[username] = &Statistic{
-			averageEncodeTime: float64(elapsed.Microseconds()),
-			averageDecodeTime: 0,
+			averageEncodeMicroseconds: float64(elapsed.Microseconds()),
+			averageDecodeMicroseconds: 0,
 			authVisits:        1,
 			verifyVisits:      0,
 		}
 	}
 	fmt.Printf("/auth endpoint visited by %v\n", username)
 	fmt.Printf("%+v\n", *stats[username])
-	fmt.Print("----------------------------------------------------------------------------------------\n\n")
+	fmt.Print("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\n")
 }
 
 func recordVerifyVisit(username string, startTime time.Time) {
@@ -82,14 +82,14 @@ func recordVerifyVisit(username string, startTime time.Time) {
 	if exists {
 		stats[username].verifyVisits++
 
-		oldAverage := stats[username].averageDecodeTime
+		oldAverage := stats[username].averageDecodeMicroseconds
 		visits := stats[username].verifyVisits
-		stats[username].averageDecodeTime = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
+		stats[username].averageDecodeMicroseconds = approxRollingAverage(oldAverage, elapsed.Microseconds(), visits)
 
 	} else {
 		stats[username] = &Statistic{
-			averageEncodeTime: 0,
-			averageDecodeTime: float64(elapsed.Microseconds()),
+			averageEncodeMicroseconds: 0,
+			averageDecodeMicroseconds: float64(elapsed.Microseconds()),
 			authVisits:        0,
 			verifyVisits:      1,
 		}
